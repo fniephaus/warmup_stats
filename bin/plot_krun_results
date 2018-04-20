@@ -651,8 +651,8 @@ class ProcessExecChart(object):
                           self.last_segment_mean - self.delta)
         upper_bound = max(self.last_segment_mean + self.last_segment_var,
                           self.last_segment_mean + self.delta)
+        # Highlight steady-equivalent segments.
         if len(self.changepoints) > 0:
-            # Plot earlier, equivalent segments.
             for index in xrange(len(self.changepoint_means) - 2, -1, -1):
                 current_segment_mean = self.changepoint_means[index]
                 current_segment_var = self.changepoint_vars[index]
@@ -670,11 +670,10 @@ class ProcessExecChart(object):
         elif len(self.changepoints) == 0 and self.x_bounds[0] != 0:
             # No changepoints, but user passed in --xbounds, so we need to check
             # whether the remaining segment mean is equivalent to the steady state.
-            if (self.segment_means[0] + self.segment_vars[0] >= lower_bound and
-                    self.segment_means[0] - self.segment_var[0] <= upper_bound):
+            if (self.changepoint_means[0] + self.changepoint_vars[0] >= lower_bound and
+                    self.changepoint_means[0] - self.changepoint_vars[0] <= upper_bound):
                 self.steady_equivalents.append((self.x_bounds[0], self.x_bounds[1]))
-                axis.plot(self.iterations,
-                          self.wallclock_data[self.x_bounds[0]:self.x_bounds[0]],
+                axis.plot(self.iterations, self.wallclock_data,
                           color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
         # Highlight steady-state segment.
         if self.last_changepoint < self.x_bounds[1]:
