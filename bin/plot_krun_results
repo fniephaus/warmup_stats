@@ -544,13 +544,12 @@ class ProcessExecChart(object):
                              (self.x_bounds[1], self.changepoint_means[-1])])
             assert len(self.segment_means) == len(self.changepoint_means)
         # Create list of steady-state equivalents (i.e. segments that should be
-        # coloured black on the plot).
+        # STEADY_COLOUR on the plot).
         self.steady_equivalents = list()  # List of (start, end) pairs.
         lower_bound = min(self.last_segment_mean - self.last_segment_var,
                           self.last_segment_mean - self.delta)
         upper_bound = max(self.last_segment_mean + self.last_segment_var,
                           self.last_segment_mean + self.delta)
-        # Highlight steady-equivalent segments.
         if len(self.changepoints) > 0:
             for index in xrange(len(self.changepoint_means) - 2, -1, -1):
                 current_segment_mean = self.changepoint_means[index]
@@ -609,7 +608,7 @@ class ProcessExecChart(object):
         if not self.changepoint_means or self.classification == 'flat':
             axis.plot(self.iterations, self.wallclock_data,
                       color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-            return  # Whole plot is black.
+            return  # Whole plot is STEADY_COLOUR (black).
         elif self.classification == 'no steady state':
             return  # Whole plot is grey.
         for (start, end) in self.steady_equivalents:
