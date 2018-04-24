@@ -543,16 +543,8 @@ class ProcessExecChart(object):
                 self.segment_means.append([(self.changepoints[-1], self.changepoint_means[-1]),
                              (self.x_bounds[1], self.changepoint_means[-1])])
             assert len(self.segment_means) == len(self.changepoint_means)
-
-    def _plot_steady_equivalent(self, axis):
-        """Plot steady state segment and 'equivalents' in a different colour."""
-
-        if not self.changepoint_means or self.classification == 'flat':
-            axis.plot(self.iterations, self.wallclock_data,
-                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-            return  # Whole plot is black.
-        elif self.classification == 'no steady state':
-            return  # Whole plot is grey.
+        # Create list of steady-state equivalents (i.e. segments that should be
+        # coloured black on the plot).
         self.steady_equivalents = list()  # List of (start, end) pairs.
         lower_bound = min(self.last_segment_mean - self.last_segment_var,
                           self.last_segment_mean - self.delta)
@@ -574,8 +566,6 @@ class ProcessExecChart(object):
                     if end > self.x_bounds[1]:
                         end = self.x_bounds[1]
                     self.steady_equivalents.append((start, end))
-                    axis.plot(self.iterations[start:end], self.wallclock_data[start:end],
-                              color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
         elif len(self.changepoints) == 0 and self.x_bounds[0] > 0:
             # No changepoints, but user passed in --xbounds, so we need to check
             # whether the remaining segment mean is equivalent to the steady state.
@@ -583,16 +573,15 @@ class ProcessExecChart(object):
             if (self.changepoint_means[0] + self.changepoint_vars[0] >= lower_bound and
                     self.changepoint_means[0] - self.changepoint_vars[0] <= upper_bound):
                 self.steady_equivalents.append((self.x_bounds[0], self.x_bounds[1]))
-                axis.plot(self.iterations, self.wallclock_data,
-                          color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-        # Highlight steady-state segment.
+        # The steady-state segment itself.
         if self.changepoints and self.last_changepoint > self.x_bounds[0] and self.last_changepoint < self.x_bounds[1]:
             self.steady_equivalents.append((self.last_changepoint - self.x_bounds[0], self.x_bounds[1]))
-            axis.plot(self.iterations[self.last_changepoint - self.x_bounds[0]:],
-                      self.wallclock_data[self.last_changepoint - self.x_bounds[0]:],
-                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
 
     def _plot_changepoints(self, axis, large_markers=True):
+        """Plot changepoints and changepoint means.
+        self._bound_changepoints() must be run  before this.
+        """
+
         if large_markers:
             size = OUTLIER_SIZE
         else:
@@ -611,6 +600,21 @@ class ProcessExecChart(object):
             axis.scatter(self.changepoints, [self.y_range[0] for _ in self.changepoints],
                               c=LINE_COLOUR, marker=OUTLIER_MARKER, s=size,
                               zorder=ZORDER_CHANGEPOINTS)
+
+    def _plot_steady_equivalent(self, axis):
+        """Plot steady state segment and 'equivalents' in a different colour.
+        self._bound_changepoints() must be run  before this.
+        """
+
+        if not self.changepoint_means or self.classification == 'flat':
+            axis.plot(self.iterations, self.wallclock_data,
+                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
+            return  # Whole plot is black.
+        elif self.classification == 'no steady state':
+            return  # Whole plot is grey.
+        for (start, end) in self.steady_equivalents:
+            axis.plot(self.iterations[start:end], self.wallclock_data[start:end],
+                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
 
     def _increment_xticklabels(self, axis):
         """Add one to each xticklabel, so that iterations are not array-indexed."""
