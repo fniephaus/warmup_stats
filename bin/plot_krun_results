@@ -384,6 +384,7 @@ class ProcessExecChart(object):
                  cycles_ylimits, inset_xbounds):
         self.grid_cell = grid_cell
         self.title = title
+        self.classification = classification
         self.window_size = window_size
         self.x_bounds = x_bounds
         self.iterations = numpy.array(xrange(x_bounds[0], x_bounds[1]))
@@ -401,46 +402,6 @@ class ProcessExecChart(object):
             self.common = self._get_scatter_points_within_bounds(common, self.x_bounds)
         else:
             self.common = None
-        # Marshal changepoint data.
-        self.changepoints = list()
-        if changepoint_means:
-            self.changepoint_means = [changepoint_means[0]]
-            self.changepoint_vars = [changepoint_vars[0]]
-        else:
-            self.changepoint_means = list()
-            self.changepoint_vars = list()
-        self.classification = classification
-        self.steady_equivalents = list()  # Used by self._plot_steady_equivalent
-        if changepoint_means:
-            self.delta = classifier['delta']
-            if changepoints:
-                self.last_changepoint = changepoints[-1]
-            else:
-                self.last_changepoint = None
-            self.last_segment_mean = changepoint_means[-1]
-            self.last_segment_var = changepoint_vars[-1]
-            self.segment_means = list()  # ((x0, y0), (x1, y1)) pairs.
-            for index, changepoint in enumerate(changepoints):
-                if changepoint >= self.x_bounds[0] and changepoint <= x_bounds[1]:
-                    self.changepoints.append(changepoints[index])
-                    self.changepoint_means.append(changepoint_means[index + 1])
-                    self.changepoint_vars.append(changepoint_vars[index + 1])
-            assert len(self.changepoints) == len(self.changepoint_means) - 1
-            assert len(self.changepoints) == len(self.changepoint_vars) - 1
-            for index, x_location in enumerate(self.changepoints):
-                if index == 0:
-                    self.segment_means.append([(self.x_bounds[0], self.changepoint_means[0]),
-                                 (x_location, self.changepoint_means[0])])
-                else:
-                    self.segment_means.append([(self.changepoints[index - 1], self.changepoint_means[index]),
-                                 (x_location, self.changepoint_means[index])])
-            if len(self.changepoints) == 0:
-                self.segment_means.append([(self.x_bounds[0], self.changepoint_means[-1]),
-                             (self.x_bounds[1], self.changepoint_means[-1])])
-            else:
-                self.segment_means.append([(self.changepoints[-1], self.changepoint_means[-1]),
-                             (self.x_bounds[1], self.changepoint_means[-1])])
-            assert len(self.segment_means) == len(self.changepoint_means)
         self.median = median
         self.tukey = tukey
         self.core_cycles = core_cycles
@@ -461,6 +422,12 @@ class ProcessExecChart(object):
                     self.cycles_max = max(max(cycles_data[core][x_bounds[0]:x_bounds[1]]), self.cycles_max)
             for core in self.core_cycles:  # For each core specified on command line.
                 self.cycles_data.append(numpy.array(cycles_data[core][x_bounds[0]:x_bounds[1]]))
+        self.delta = classifier['delta']
+        # Marshal changepoint data, sets self.changepoints, self.changepoint_means,
+        # self.changepoint_vars, self.steady_equivalents. Requires self.delta,
+        # self.x_bounds, self.classification to already be set.
+        self._bound_changepoints(changepoints, changepoint_means, changepoint_vars)
+        # Deal with instrumentation data.
         self.instr_data = list()
         if instr_data:
             self.instr_data = instr_data
@@ -531,6 +498,119 @@ class ProcessExecChart(object):
             self.plot_zoomed_data()
         self._increment_xticklabels(self.wallclock_axis)
         add_margin_to_axes(self.wallclock_axis, x=0.02, y=0.02)
+
+    def _bound_changepoints(self, changepoints, changepoint_means, changepoint_vars):
+        """Bound changepoint data according to self.x_bounds.
+        Ensure that changepoint data is in correct format for plotting both
+        changepoints, changepoint means and steady equivalent segments (i.e.
+        deciding which parts of the plot should be grey or black).
+        """
+
+        self.changepoints = list()
+        if changepoint_means:
+            self.changepoint_means = [changepoint_means[0]]
+            self.changepoint_vars = [changepoint_vars[0]]
+        else:
+            self.changepoint_means = list()
+            self.changepoint_vars = list()
+        self.steady_equivalents = list()  # Used by self._plot_steady_equivalent
+        if changepoint_means:
+            if changepoints:
+                self.last_changepoint = changepoints[-1]
+            else:
+                self.last_changepoint = None
+            self.last_segment_mean = changepoint_means[-1]
+            self.last_segment_var = changepoint_vars[-1]
+            self.segment_means = list()  # ((x0, y0), (x1, y1)) pairs.
+            for index, changepoint in enumerate(changepoints):
+                if changepoint >= self.x_bounds[0] and changepoint <= self.x_bounds[1]:
+                    self.changepoints.append(changepoints[index])
+                    self.changepoint_means.append(changepoint_means[index + 1])
+                    self.changepoint_vars.append(changepoint_vars[index + 1])
+            assert len(self.changepoints) == len(self.changepoint_means) - 1
+            assert len(self.changepoints) == len(self.changepoint_vars) - 1
+            for index, x_location in enumerate(self.changepoints):
+                if index == 0:
+                    self.segment_means.append([(self.x_bounds[0], self.changepoint_means[0]),
+                                 (x_location, self.changepoint_means[0])])
+                else:
+                    self.segment_means.append([(self.changepoints[index - 1], self.changepoint_means[index]),
+                                 (x_location, self.changepoint_means[index])])
+            if len(self.changepoints) == 0:
+                self.segment_means.append([(self.x_bounds[0], self.changepoint_means[-1]),
+                             (self.x_bounds[1], self.changepoint_means[-1])])
+            else:
+                self.segment_means.append([(self.changepoints[-1], self.changepoint_means[-1]),
+                             (self.x_bounds[1], self.changepoint_means[-1])])
+            assert len(self.segment_means) == len(self.changepoint_means)
+
+    def _plot_steady_equivalent(self, axis):
+        """Plot steady state segment and 'equivalents' in a different colour."""
+
+        if not self.changepoint_means or self.classification == 'flat':
+            axis.plot(self.iterations, self.wallclock_data,
+                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
+            return  # Whole plot is black.
+        elif self.classification == 'no steady state':
+            return  # Whole plot is grey.
+        self.steady_equivalents = list()  # List of (start, end) pairs.
+        lower_bound = min(self.last_segment_mean - self.last_segment_var,
+                          self.last_segment_mean - self.delta)
+        upper_bound = max(self.last_segment_mean + self.last_segment_var,
+                          self.last_segment_mean + self.delta)
+        # Highlight steady-equivalent segments.
+        if len(self.changepoints) > 0:
+            for index in xrange(len(self.changepoint_means) - 2, -1, -1):
+                current_segment_mean = self.changepoint_means[index]
+                current_segment_var = self.changepoint_vars[index]
+                if (current_segment_mean + current_segment_var >= lower_bound and
+                        current_segment_mean - current_segment_var <= upper_bound):
+                    if index == 0:  # (start, end) are array indices.
+                        start = 0
+                        end = self.changepoints[index] - self.x_bounds[0]
+                    else:
+                        start = self.changepoints[index - 1] - self.x_bounds[0]
+                        end = self.changepoints[index] - self.x_bounds[0]
+                    if end > self.x_bounds[1]:
+                        end = self.x_bounds[1]
+                    self.steady_equivalents.append((start, end))
+                    axis.plot(self.iterations[start:end], self.wallclock_data[start:end],
+                              color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
+        elif len(self.changepoints) == 0 and self.x_bounds[0] > 0:
+            # No changepoints, but user passed in --xbounds, so we need to check
+            # whether the remaining segment mean is equivalent to the steady state.
+            # Note that there MAY have been changepoints in the full data.
+            if (self.changepoint_means[0] + self.changepoint_vars[0] >= lower_bound and
+                    self.changepoint_means[0] - self.changepoint_vars[0] <= upper_bound):
+                self.steady_equivalents.append((self.x_bounds[0], self.x_bounds[1]))
+                axis.plot(self.iterations, self.wallclock_data,
+                          color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
+        # Highlight steady-state segment.
+        if self.changepoints and self.last_changepoint > self.x_bounds[0] and self.last_changepoint < self.x_bounds[1]:
+            self.steady_equivalents.append((self.last_changepoint - self.x_bounds[0], self.x_bounds[1]))
+            axis.plot(self.iterations[self.last_changepoint - self.x_bounds[0]:],
+                      self.wallclock_data[self.last_changepoint - self.x_bounds[0]:],
+                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
+
+    def _plot_changepoints(self, axis, large_markers=True):
+        if large_markers:
+            size = OUTLIER_SIZE
+        else:
+            size = ZOOM_OUTLIER_SIZE
+        if self.changepoint_means:
+            for index, x_location in enumerate(self.changepoints):
+                axis.axvline(x_location, linestyle=CHANGEPOINT_LINE_STYLE,
+                             zorder=ZORDER_CHANGEPOINTS, color=CHANGEPOINT_LINE_COLOR,
+                             linewidth=CHANGEPOINT_LINE_WIDTH)
+            lines = LineCollection(self.segment_means, color=CHANGEPOINT_LINE_COLOR,
+                                   zorder=ZORDER_CHANGEPOINTS, linestyle=CHANGEPOINT_LINE_STYLE,
+                                   linewidths=[CHANGEPOINT_LINE_WIDTH
+                                   for _ in xrange(len(self.segment_means))])
+            axis.add_collection(lines)
+        if self.changepoints and not self.changepoint_means:
+            axis.scatter(self.changepoints, [self.y_range[0] for _ in self.changepoints],
+                              c=LINE_COLOUR, marker=OUTLIER_MARKER, s=size,
+                              zorder=ZORDER_CHANGEPOINTS)
 
     def _increment_xticklabels(self, axis):
         """Add one to each xticklabel, so that iterations are not array-indexed."""
@@ -636,71 +716,6 @@ class ProcessExecChart(object):
                          color=COMMON_COLOR, marker=common_marker, s=size,
                          label=('Common outliers (${%.2f}\\%%$)' % pc_common),
                          zorder=ZORDER_MARKERS)
-
-    def _plot_steady_equivalent(self, axis):
-        """Plot steady state segment and 'equivalents' in a different colour."""
-
-        if not self.changepoint_means or self.classification == 'flat':
-            axis.plot(self.iterations, self.wallclock_data,
-                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-            return  # Whole plot is black.
-        elif self.classification == 'no steady state':
-            return  # Whole plot is grey.
-        self.steady_equivalents = list()  # List of (start, end) pairs.
-        lower_bound = min(self.last_segment_mean - self.last_segment_var,
-                          self.last_segment_mean - self.delta)
-        upper_bound = max(self.last_segment_mean + self.last_segment_var,
-                          self.last_segment_mean + self.delta)
-        # Highlight steady-equivalent segments.
-        if len(self.changepoints) > 0:
-            for index in xrange(len(self.changepoint_means) - 2, -1, -1):
-                current_segment_mean = self.changepoint_means[index]
-                current_segment_var = self.changepoint_vars[index]
-                if (current_segment_mean + current_segment_var >= lower_bound and
-                        current_segment_mean - current_segment_var <= upper_bound):
-                    if index == 0:  # (start, end) are array indices.
-                        start = 0
-                        end = self.changepoints[index] - self.x_bounds[0]
-                    else:
-                        start = self.changepoints[index - 1] - self.x_bounds[0]
-                        end = self.changepoints[index] - self.x_bounds[0]
-                    self.steady_equivalents.append((start, end))
-                    axis.plot(self.iterations[start:end], self.wallclock_data[start:end],
-                              color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-        elif len(self.changepoints) == 0 and self.x_bounds[0] != 0:
-            # No changepoints, but user passed in --xbounds, so we need to check
-            # whether the remaining segment mean is equivalent to the steady state.
-            if (self.changepoint_means[0] + self.changepoint_vars[0] >= lower_bound and
-                    self.changepoint_means[0] - self.changepoint_vars[0] <= upper_bound):
-                self.steady_equivalents.append((self.x_bounds[0], self.x_bounds[1]))
-                axis.plot(self.iterations, self.wallclock_data,
-                          color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-        # Highlight steady-state segment.
-        if self.last_changepoint < self.x_bounds[1]:
-            self.steady_equivalents.append((self.last_changepoint, self.x_bounds[1]))
-            axis.plot(self.iterations[self.last_changepoint:],
-                      self.wallclock_data[self.last_changepoint - self.x_bounds[0]:],
-                      color=STEADY_COLOUR, zorder=ZORDER_DATA + 1, linewidth=LINE_WIDTH)
-
-    def _plot_changepoints(self, axis, large_markers=True):
-        if large_markers:
-            size = OUTLIER_SIZE
-        else:
-            size = ZOOM_OUTLIER_SIZE
-        if self.changepoint_means:
-            for index, x_location in enumerate(self.changepoints):
-                axis.axvline(x_location, linestyle=CHANGEPOINT_LINE_STYLE,
-                             zorder=ZORDER_CHANGEPOINTS, color=CHANGEPOINT_LINE_COLOR,
-                             linewidth=CHANGEPOINT_LINE_WIDTH)
-            lines = LineCollection(self.segment_means, color=CHANGEPOINT_LINE_COLOR,
-                                   zorder=ZORDER_CHANGEPOINTS, linestyle=CHANGEPOINT_LINE_STYLE,
-                                   linewidths=[CHANGEPOINT_LINE_WIDTH
-                                   for _ in xrange(len(self.segment_means))])
-            axis.add_collection(lines)
-        if self.changepoints and not self.changepoint_means:
-            axis.scatter(self.changepoints, [self.y_range[0] for _ in self.changepoints],
-                              c=LINE_COLOUR, marker=OUTLIER_MARKER, s=size,
-                              zorder=ZORDER_CHANGEPOINTS)
 
     def plot_cycles_data(self):
         """Add core cycles data on another set of charts."""
