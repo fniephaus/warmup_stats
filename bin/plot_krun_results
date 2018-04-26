@@ -176,7 +176,7 @@ DPI = 300
 
 def get_instr_data(key, machine, instr_dir, pexec_idxs):
     """Get the instrumentation data summary for the specified process execution
-    indexes"""
+    indices"""
 
     bench, vm, variant = key.split(":")
     ret = []
@@ -617,6 +617,7 @@ class ProcessExecChart(object):
 
     def _increment_xticklabels(self, axis):
         """Add one to each xticklabel, so that iterations are not array-indexed."""
+
         pyplot.draw()  # Force xticklabels to be drawn.
         labels = [label.get_text() for label in axis.get_xticklabels()]
         try:
@@ -654,6 +655,7 @@ class ProcessExecChart(object):
         of outliers to plot, but we only want to view a small section of the
         whole chart.
         """
+
         x_vals = [val for val in scatter if val >= x_bounds[0] and val < x_bounds[1]]
         y_vals = [val - x_bounds[0] for val in scatter if val >= x_bounds[0] and val < x_bounds[1]]
         return x_vals, y_vals
@@ -722,6 +724,7 @@ class ProcessExecChart(object):
 
     def plot_cycles_data(self):
         """Add core cycles data on another set of charts."""
+
         self.cycles_axes = [None] * len(self.cycles_data)
         for core in xrange(len(self.cycles_data)):
             self.cycles_axes[core] = pyplot.subplot(self.inner_grid[self.row, 0],
@@ -742,6 +745,7 @@ class ProcessExecChart(object):
 
     def plot_instr_data(self):
         """Add any VM instrumentation data on another set of charts."""
+
         legend_texts = set()
         self.instr_axes = [None] * len(self.instr_data)
         for index, idata in enumerate(self.instr_data):
@@ -766,6 +770,7 @@ class ProcessExecChart(object):
 
     def plot_zoomed_data(self):
         """Add zoomed in chart with wallclock data."""
+
         self.zoomed_axis = pyplot.subplot(self.inner_grid[self.row, 0], sharex=self.wallclock_axis)
         self.zoomed_axis.autoscale(enable=False, axis='both') # Set x/y-limits manually.
         pyplot.setp(self.zoomed_axis.get_xticklabels(), visible=False)
@@ -785,6 +790,7 @@ class ProcessExecChart(object):
         """Draw an inset containing the early iterations of the wallclock data.
         This MUST be done after adjusting subplots, so that we can calculate
         the correct bounding box for the inset."""
+
         # Find a rectangle that will not collide with data. Start top-right
         # and work left, then try bottom-right and work left. INSET_PADDING
         # is added because we add a little padding to the whole chart so that
@@ -880,8 +886,7 @@ def draw_page(is_interactive, executions, cycles_executions,
               changepoint_vars, classifications, classifier,
               median, tukey, inset=False, zoom=True, legend_off=True,
               core_cycles=(0,1,2,3), cycles_ylimits=None, inset_xlimits=None):
-    """Plot a page of benchmarks.
-    """
+    """Plot a page of benchmarks."""
 
     n_execs = len(executions)
     if n_execs == 0:
@@ -1035,8 +1040,8 @@ def draw_page(is_interactive, executions, cycles_executions,
 
 
 def set_pdf_metadata(pdf_document):
-    """Set metadata fields inside a PDF document.
-    """
+    """Set metadata fields inside a PDF document."""
+
     info_dict = pdf_document.infodict()
     info_dict['Title'] = 'Krun results'
     info_dict['Author'] = 'soft-dev.org'
@@ -1342,8 +1347,8 @@ def get_data_dictionaries(json_files, benchmarks=[], wallclock_only=False,
 
 
 def create_cli_parser():
-    """Create a parser to deal with command line switches.
-    """
+    """Create a parser to deal with command line switches."""
+
     script = os.path.basename(__file__)
     description = (('Plot data from Krun results file(s).'
                     '\n\nExample usage:\n\t$ python %s results1.json.bz2\n'
