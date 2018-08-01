@@ -12,9 +12,9 @@ installation work needed.
 # Basic usage
 
 User should directly call the `bin/warmup_stats`, which is a front-end to other
-scripts in `bin/`. `warmup_stats` takes either CSV files or [Krun](http://soft-
-dev.org/src/krun/) results files as input. As output it can create HTML or LaTeX
-/ PDF tables and diffs, or PDF plots.
+scripts in `bin/`. `warmup_stats` takes either CSV files or
+[Krun](http://soft-dev.org/src/krun/) results files as input. As output it can
+create HTML or LaTeX / PDF tables and diffs, or PDF plots.
 
 ## CSV format
 
